@@ -636,6 +636,53 @@ function renderSummary() {
 
 function grandTotal() { return baseFareTotal() + seatsFareTotal() + extrasFareTotal(); }
 
+/* ---------------- WhatsApp message: passengers, seats and full totals ---------------- */
+function paxMixLabel() {
+  const s = state.search, parts = [];
+  if (s.adults) parts.push(`${s.adults} adult${s.adults > 1 ? "s" : ""}`);
+  if (s.children) parts.push(`${s.children} child${s.children > 1 ? "ren" : ""}`);
+  if (s.infants) parts.push(`${s.infants} infant${s.infants > 1 ? "s" : ""}`);
+  return parts.join(", ");
+}
+
+// Builds the passengers/seats section and the complete price breakdown, using the
+// same functions as the on-screen totals so the message always matches the site.
+function buildBookingTotalsLines() {
+  const isReturn = state.search.trip === "return";
+  const lines = ["*Passengers & Seats*"];
+
+  let seatIdx = 0;
+  state.passengers.forEach((p, i) => {
+    const full = [p.firstName, p.lastName].filter(Boolean).join(" ") || "Passenger " + (i + 1);
+    if (p.type === "Infant") {
+      lines.push(`${i + 1}. ${full} (Infant) - no seat`);
+      return;
+    }
+    const seatId = state.seats[seatIdx++];
+    if (!seatId) { lines.push(`${i + 1}. ${full} (${p.type}) - seat not selected`); return; }
+    const fee = seatSurcharge(seatType(parseInt(seatId)));
+    lines.push(`${i + 1}. ${full} (${p.type}) - Seat ${seatId}${fee ? ` (seat fee ${formatPrice(fee)})` : " (no seat fee)"}`);
+  });
+
+  const mix = paxMixLabel();
+  lines.push("", "*Price Breakdown*");
+  if (isReturn) {
+    lines.push(`Outbound fare (${mix}): ${formatPrice(legFareTotal(state.selectedFlight))}`);
+    lines.push(`Return fare (${mix}): ${formatPrice(legFareTotal(state.selectedReturnFlight))}`);
+    lines.push(`Base fare total: ${formatPrice(baseFareTotal())}`);
+  } else {
+    lines.push(`Fare (${mix}): ${formatPrice(baseFareTotal())}`);
+  }
+  lines.push(`Seat fees: ${formatPrice(seatsFareTotal())}`);
+  lines.push(`Extra baggage: ${state.extras.extraBags} x ${formatPrice(1200)} = ${formatPrice(state.extras.extraBags * 1200)}`);
+  lines.push(`Lounge access: ${state.extras.lounge} x ${formatPrice(2500)} = ${formatPrice(state.extras.lounge * 2500)}`);
+  lines.push(`Parcel add-on: ${state.extras.parcel ? formatPrice(1500) : "none"}`);
+  lines.push(`Extras total: ${formatPrice(extrasFareTotal())}`);
+  lines.push(`Taxes & fees: included`);
+  lines.push("", `*GRAND TOTAL: ${formatPrice(grandTotal())}*`);
+  return lines;
+}
+
 /* ---------------- STEP 7: ENQUIRY ---------------- */
 function renderEnquiry() {
   const r = state.selectedFlight;
@@ -667,27 +714,25 @@ function renderEnquiry() {
     const ref = "SB-" + Math.random().toString(36).slice(2, 8).toUpperCase();
 
     const lines = [
-      "New booking request — Skyward Airlines",
+      "*New booking request — Skyward Airlines*",
       `Reference: ${ref}`,
       "",
-      `Passenger: ${name}`,
+      "*Contact*",
+      `Name: ${name}`,
       `Phone: ${phone}`,
       `Email: ${email}`,
       `Preferred contact: ${contactMethod}`,
       "",
+      "*Flights*",
+      `Trip type: ${rr ? "Round trip" : "One way"}`,
       `${rr ? "Outbound" : "Route"}: ${r.originAirport.city} (${r.origin}) -> ${r.destinationAirport.city} (${r.destination})`,
       `${rr ? "Outbound Date / Flight" : "Date / Flight"}: ${formatDate(state.search.dep)} · ${r.flightNumber}`,
       ...(rr ? [
         `Return: ${rr.originAirport.city} (${rr.origin}) -> ${rr.destinationAirport.city} (${rr.destination})`,
         `Return Date / Flight: ${formatDate(state.search.ret)} · ${rr.flightNumber}`
       ] : []),
-      `Passengers: ${paxTotal()}`,
-      `Seats: ${Object.values(state.seats).join(", ") || "Not selected"}`,
-      `Extras: ${state.extras.extraBags} extra bag(s), ${state.extras.lounge} lounge`,
-      `Cargo / Parcels: ${state.extras.parcel ? 1 : 0}`,
       "",
-      `Booking totals — Passengers: ${paxTotal()}, Seats: ${Object.keys(state.seats).length}, Cargo/Parcels: ${state.extras.parcel ? 1 : 0}`,
-      `Total: ${formatPrice(grandTotal())}`
+      ...buildBookingTotalsLines()
     ];
     if (message) lines.push("", `Message: ${message}`);
 
@@ -700,6 +745,11 @@ function renderEnquiry() {
 
     openWhatsApp(link);
     showConfirmation(ref, link);
+
+    // Google Ads conversion tracking — fires once, exactly when a booking is confirmed
+    if (typeof gtag === "function") {
+      gtag('event', 'conversion', {'send_to': 'AW-18433634020/ZFF4CKL-3O8cEOTd69VE'});
+    }
   };
 }
 

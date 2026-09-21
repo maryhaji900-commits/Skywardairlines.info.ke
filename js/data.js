@@ -7,7 +7,7 @@
 // International format, no "+" and no leading zero — required by wa.me links.
 // Update this single value to change the WhatsApp number used sitewide
 // (Contact Us page and the booking flow's final step).
-const WHATSAPP_NUMBER = "254755455919";
+const WHATSAPP_NUMBER = "254756414822";
 
 const AIRPORTS = [
   { code: "NBO", displayCode: "JKIA", name: "Jomo Kenyatta International Airport", city: "Nairobi" },
